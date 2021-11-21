@@ -1,8 +1,9 @@
+import axios from 'axios';
+
 import './css/styles.css';
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
-
 
 
 const form = document.querySelector("#search-form");
@@ -19,55 +20,62 @@ let limit = 40;
 
 const totalPages = 500 / limit;
 
-
-
-
-
+let fetchItems;
+let gallery = new SimpleLightbox('.gallery a');
 async function onSubmit(e) {
     e.preventDefault();
     const inputValue = e.target.searchQuery.value;
     if (!inputValue) {
         clearGalleryConteiner();
         hideBtnLoadMore();
-      return Notify.warning("Enter your search query, please!");  
+      return Notify.warning("Enter your search query, please!");
     }
-    fetchPhoto(inputValue)
-        .then(photo => {
-            renderPhoto(photo);
-            page += 1;
-            loadMoreBtn.addEventListener("click", onLoadMore)
-        })
-        .then(() => {
-            let gallery = new SimpleLightbox('.gallery a');
-            return gallery;
-        })
-        .catch(error => {
-        console.log(error);
-    })
+    galleryConteiner.innerHTML = ''
+    page = 1
+    fetchItems = async function() {
+      try {
+        const photo = await fetchPhoto(inputValue);
+        renderPhoto(photo);
+          page += 1; 
+     
+        loadMoreBtn.addEventListener("click", onLoadMore)
+        gallery.refresh();
+      } catch (error) {
+        console.dir(error);
+      }
+    }
+    fetchItems()
     form.reset();
 }
 
-function fetchPhoto(inputValue) {
-    return fetch(`https://pixabay.com/api/?key=24419358-338d9960aaa56c480bc3e3cda&q=${inputValue}&page&image_type=photo&orientation=horizontal&safesearch=true&webformatURL&largeImageURL&tags&likes&views&comments&downloads&per_page=40`).then(
-        (response) => {
-            if (!response.ok) {
-                throw new Error(response.status);
-            }
-            return response.json();
-        }
-    )    
+async function fetchPhoto(inputValue) {
+  try {
+    const response = await axios.get(`https://pixabay.com/api/?key=24419358-338d9960aaa56c480bc3e3cda&q=${inputValue}&page=${page}&image_type=photo&orientation=horizontal&safesearch=true&webformatURL&largeImageURL&tags&likes&views&comments&downloads&per_page=40`);
+    return response.data
+  } catch (e) {
+    return Promise.reject(e);
+  }
 }
 
 function renderPhoto(photos) {
-    console.log(photos.total);
+
     if (photos.total === 0) {
         clearGalleryConteiner();
         hideBtnLoadMore();
-        return Notify.failure("Sorry, there are no images matching your search query. Please try again."); 
-    }
-    Notify.success(`Hooray! We found ${photos.totalHits} images.`);
+        return Notify.failure("Sorry, there are no images matching your search query. Please try again.");
+    } else if (photos.total < 41) {
 
-    showBtnLoadMore()
+        showBtnLoadMore();
+        loadMoreBtn.addEventListener("click", () => {
+            loadMoreBtn.getAttribute('disabled')
+            hideBtnLoadMore();
+            Notify.info("We're sorry, but you've reached the end of search results.")
+        }
+        );
+    } 
+    showBtnLoadMore();
+    
+        Notify.success(`Hooray! We found ${photos.totalHits} images.`);
     
     const markup = photos.hits.map(({ tags, likes, webformatURL, comments, downloads, views, largeImageURL }) => {
         return `<a href="${largeImageURL}" class="photo-card">
@@ -94,10 +102,12 @@ function renderPhoto(photos) {
     }).join("");
 
     return galleryConteiner.insertAdjacentHTML("beforeend", markup);
+          
+    
 }
 
 function clearGalleryConteiner() {
-    galleryConteiner.innerHTML = ''; 
+    galleryConteiner.innerHTML = '';
 }
 
 function hideBtnLoadMore() {
@@ -109,18 +119,9 @@ function showBtnLoadMore() {
 }
 
 function onLoadMore() {
-    
-    fetchPhoto()
-    .then(photo => {
-            renderPhoto(photo);
-            page += 1;
-        }).then(() => {
-            let gallery = new SimpleLightbox('.gallery a');
-            return gallery;
-        })
-        .catch(error => {
-        console.log(error);
-    })
-
-  
+  if (fetchItems) {
+      fetchItems();
+          
+    }
+     
 }
